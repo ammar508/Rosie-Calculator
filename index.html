@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Rosie's Dog Walking — Quote Calculator</title>
+  <style>
+    body {font-family: system-ui, sans-serif; max-width: 480px; margin: 2rem auto; padding: 1rem; line-height: 1.5;}
+    .form {margin: 1.5rem 0;}
+    .form label {display: block; margin-bottom: 0.4rem;}
+    input {width: 100%; padding: 0.5rem; box-sizing: border-box;}
+    .result {margin-top: 2rem; padding: 1rem; background: #f5f5f5; border-radius: 4px;}
+    .total {font-size: 1.4rem; font-weight: bold; margin: 0.5rem 0;}
+    .breakdown {margin-top: 1rem; white-space: pre-wrap;}
+    .note {color: #666; font-size: 0.9rem; margin-top: 0.5rem;}
+    @media (min-width: 481px) {body {max-width: none; margin: 2rem 10%;}}
+  </style>
+</head>
+<body>
+  <h1>Rosie's Dog Walking — Quote Calculator</h1>
+
+  <div class="form">
+    <label for="dogCount">Number of dogs</label>
+    <input id="dogCount" type="number" min="1">
+
+    <label for="walkDate">Walk date</label>
+    <input id="walkDate" type="date">
+  </div>
+
+  <div class="result" id="result">
+    <div class="total" id="total">$25.00</div>
+    <div class="breakdown" id="breakdown">First dog: $25.00</div>
+  </div>
+
+  <script>
+    // ---------------------------------------------------------------
+    // FR-7: Pricing constants (single source of truth)
+    // ---------------------------------------------------------------
+    const BASE_RATE_CENTS = 2500;          // $25.00 per first dog
+    const EXTRA_DOG_DISCOUNT_PCT = 50;     // 50% off for each additional dog
+    const SAME_DAY_SURCHARGE_CENTS = 500;  // $5.00 flat once per quote
+    const HOLIDAY_LIST = ["12-25", "01-01"]; // Local holiday dates (no internet)
+
+    // ---------------------------------------------------------------
+    // FR-6: Integer-cents arithmetic & formatting (half-up rounding)
+    // ---------------------------------------------------------------
+    function cents(val) {
+      return Math.round(val * 100);
+    }
+    function formatCents(c) {
+      const d = Math.max(0, c);
+      const whole = Math.floor(d / 100);
+      const frac = d % 100;
+      return `$${whole}.${frac < 10 ? '0' : ''}${frac}`;
+    }
+
+    // ---------------------------------------------------------------
+    // FR-11: Date helpers (same-day vs holiday)
+    // ---------------------------------------------------------------
+    function todayString() {
+      const d = new Date();
+      return `${d.getMonth() + 1}-${d.getDate()}`;
+    }
+    function isHoliday(dateStr) {
+      return HOLIDAY_LIST.includes(dateStr);
+    }
+    function isSameDay(chosenDateInput) {
+      if (!chosenDateInput) return false;
+      const chosen = new Date(chosenDateInput);
+      const today = new Date();
+      return chosen.getFullYear() === today.getFullYear() &&
+             chosen.getMonth() === today.getMonth() &&
+             chosen.getDate() === today.getDate();
+    }
+    function monthDayFromDateString(isoDate) {
+      const d = new Date(isoDate);
+      return `${d.getMonth() + 1}-${d.getDate()}`;
+    }
+
+    // ---------------------------------------------------------------
+    // FR-2, FR-3, FR-4, FR-5: Core quote computation
+    // ---------------------------------------------------------------
+    function computeQuote(dogCount, chosenDateInput) {
+      // Dog subtotal: base + 50% per extra dog (FR-2)
+      const firstDogCents = BASE_RATE_CENTS;
+      const extraDogs = Math.max(dogCount - 1, 0);
+      const extraDogCents = Math.round(BASE_RATE_CENTS * EXTRA_DOG_DISCOUNT_PCT / 100);
+      const dogSubtotalCents = firstDogCents + extraDogCents * extraDogs;
+
+      // Day modifier precedence: holiday > same-day (FR-5)
+      const holiday = isHoliday(monthDayFromDateString(chosenDateInput));
+      const sameDay = isSameDay(chosenDateInput);
+      let modifierCents = 0;
+      let modifierDesc = '';
+      let note = '';
+
+      if (holiday) {
+        modifierCents = dogSubtotalCents; // ×2 means add another subtotal's worth
+        modifierDesc = 'Holiday double — price doubled';
+        note = 'Holiday walk — price doubled; same-day surcharge not added.';
+      } else if (sameDay) {
+        modifierCents = SAME_DAY_SURCHARGE_CENTS;
+        modifierDesc = 'Same-day surcharge';
+        note = '';
+      } else {
+        modifierCents = 0;
+        modifierDesc = 'No extra fees';
+        note = '';
+      }
+
+      const totalCents = dogSubtotalCents + modifierCents;
+
+      return {
+        dogSubtotalCents,
+        totalCents,
+        modifierDesc,
+        note,
+        dogSubtotalDollars: formatCents(dogSubtotalCents),
+        totalDollars: formatCents(totalCents),
+        dogCount,
+        holiday,
+        sameDay,
+        note
+      };
+    }
+
+    // ---------------------------------------------------------------
+    // FR-8, FR-9, FR-10: Render / update (instant, no refresh)
+    // ---------------------------------------------------------------
+    function render(result) {
+      const totalEl = document.getElementById('total');
+      const breakdownEl = document.getElementById('breakdown');
+      const noteEl = document.getElementById('note');
+      totalEl.textContent = result.totalDollars;
+      breakdownEl.innerHTML = `
+        First dog: ${formatCents(result.dogSubtotalCents)}
+        Additional dogs (${result.dogCount - 1} × $${formatCents(EXTRA_DOG_DISCOUNT_PCT / 100 * BASE_RATE_CENTS / 2)}) each: $${formatCents(result.dogSubtotalCents - BASE_RATE_CENTS)}
+        Subtotal: ${result.dogSubtotalDollars}
+        ${result.modifierDesc}: ${result.note}
+      `;
+      if (noteEl) noteEl.textContent = result.note;
+    }
+
+    // Default date: tomorrow, skipping any holiday to guarantee $25.00
+    function defaultDate() {
+      const d = new Date();
+      d.setDate(d.getDate() + 1);
+      while (isHoliday(monthDayFromDateString(d.toISOString().split('T')[0]))) {
+        d.setDate(d.getDate() + 1);
+      }
+      return d.toISOString().split('T')[0];
+    }
+
+    function updateQuote() {
+      const dogCount = Math.max(parseInt(document.getElementById('dogCount').value) || 1, 1);
+      const chosenDate = document.getElementById('walkDate').value;
+      const result = computeQuote(dogCount, chosenDate);
+      render(result);
+    }
+
+    // Wire up inputs
+    document.getElementById('dogCount').addEventListener('input', updateQuote);
+    document.getElementById('walkDate').addEventListener('input', updateQuote);
+
+    // Initial render
+    updateQuote();
+  </script>
+</body>
+</html>

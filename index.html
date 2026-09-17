@@ -84,7 +84,7 @@
     }
     function monthDayFromDateString(isoDate) {
       const d = new Date(isoDate);
-      return `${d.getMonth() + 1}-${d.getDate()}`;
+      return `${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
     }
 
     // ---------------------------------------------------------------

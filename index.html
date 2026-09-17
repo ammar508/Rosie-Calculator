@@ -9,6 +9,7 @@
     .form {margin: 1.5rem 0;}
     .form label {display: block; margin-bottom: 0.4rem;}
     input {width: 100%; padding: 0.5rem; box-sizing: border-box;}
+    input[type="checkbox"] {width: auto; margin-right: 0.3rem;}
     .result {margin-top: 2rem; padding: 1rem; background: #f5f5f5; border-radius: 4px;}
     .total {font-size: 1.4rem; font-weight: bold; margin: 0.5rem 0;}
     .breakdown {margin-top: 1rem; white-space: pre-wrap;}
@@ -27,9 +28,17 @@
     <input id="walkDate" type="date">
   </div>
 
+  <div class="form">
+    <label for="aggressiveDog">
+      <input id="aggressiveDog" type="checkbox">
+      Any dog aggressive or reactive?
+    </label>
+  </div>
+
   <div class="result" id="result">
     <div class="total" id="total">$25.00</div>
     <div class="breakdown" id="breakdown">First dog: $25.00</div>
+    <div class="note" id="note"></div>
   </div>
 
   <script>
@@ -39,6 +48,7 @@
     const BASE_RATE_CENTS = 2500;          // $25.00 per first dog
     const EXTRA_DOG_DISCOUNT_PCT = 50;     // 50% off for each additional dog
     const SAME_DAY_SURCHARGE_CENTS = 500;  // $5.00 flat once per quote
+    const AGGRESSIVE_SURCHARGE_CENTS = 1000; // $10.00 flat once per booking
     const HOLIDAY_LIST = ["12-25", "01-01"]; // Local holiday dates (no internet)
 
     // ---------------------------------------------------------------
@@ -78,9 +88,9 @@
     }
 
     // ---------------------------------------------------------------
-    // FR-2, FR-3, FR-4, FR-5: Core quote computation
+    // FR-2, FR-3, FR-4, FR-5, FR-14, FR-15: Core quote computation
     // ---------------------------------------------------------------
-    function computeQuote(dogCount, chosenDateInput) {
+    function computeQuote(dogCount, chosenDateInput, hasAggressiveDog = false) {
       // Dog subtotal: base + 50% per extra dog (FR-2)
       const firstDogCents = BASE_RATE_CENTS;
       const extraDogs = Math.max(dogCount - 1, 0);
@@ -108,18 +118,21 @@
         note = '';
       }
 
-      const totalCents = dogSubtotalCents + modifierCents;
+      const aggressiveDogCents = hasAggressiveDog ? AGGRESSIVE_SURCHARGE_CENTS : 0;
+      const totalCents = dogSubtotalCents + modifierCents + aggressiveDogCents;
 
       return {
         dogSubtotalCents,
         totalCents,
         modifierDesc,
         note,
+        aggressiveDogCents,
         dogSubtotalDollars: formatCents(dogSubtotalCents),
         totalDollars: formatCents(totalCents),
         dogCount,
         holiday,
         sameDay,
+        hasAggressiveDog,
         note
       };
     }
@@ -137,6 +150,7 @@
         Additional dogs (${result.dogCount - 1} × $${formatCents(EXTRA_DOG_DISCOUNT_PCT / 100 * BASE_RATE_CENTS / 2)}) each: $${formatCents(result.dogSubtotalCents - BASE_RATE_CENTS)}
         Subtotal: ${result.dogSubtotalDollars}
         ${result.modifierDesc}: ${result.note}
+        ${result.hasAggressiveDog ? `Aggressive/reactive surcharge: ${formatCents(result.aggressiveDogCents)}` : ''}
       `;
       if (noteEl) noteEl.textContent = result.note;
     }
@@ -154,13 +168,15 @@
     function updateQuote() {
       const dogCount = Math.max(parseInt(document.getElementById('dogCount').value) || 1, 1);
       const chosenDate = document.getElementById('walkDate').value;
-      const result = computeQuote(dogCount, chosenDate);
+      const hasAggressiveDog = document.getElementById('aggressiveDog').checked;
+      const result = computeQuote(dogCount, chosenDate, hasAggressiveDog);
       render(result);
     }
 
     // Wire up inputs
     document.getElementById('dogCount').addEventListener('input', updateQuote);
     document.getElementById('walkDate').addEventListener('input', updateQuote);
+    document.getElementById('aggressiveDog').addEventListener('change', updateQuote);
 
     // Initial render
     updateQuote();
